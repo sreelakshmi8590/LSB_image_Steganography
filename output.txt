@@ -1,0 +1,110 @@
+#ifndef ENCODE_H
+#define ENCODE_H
+
+#include "types.h" // Contains user defined types
+
+/* 
+ * Structure to store information required for
+ * encoding secret file to source Image
+ * Info about output and intermediate data is
+ * also stored
+ */
+
+#define MAX_SECRET_BUF_SIZE 1
+#define MAX_IMAGE_BUF_SIZE (MAX_SECRET_BUF_SIZE * 8)
+#define MAX_FILE_SUFFIX 4
+
+typedef struct _EncodeInfo
+{
+    /* Source Image info */
+    //using pointer to avoid fixed size
+    char *src_image_fname;//Stores filename of input image(source imge)
+    FILE *fptr_src_image;//File pointer to open and read the input image
+    uint image_capacity;//Stores how many bytes the image can store (calculated from image size).
+    uint bits_per_pixel;//Stores how many bits represent one pixel
+    char image_data[MAX_IMAGE_BUF_SIZE];//Temporary buffer to store image pixel data while modifying LSBs.
+
+    /* Secret File Info */
+    char *secret_fname;//Name of the secret file (this is the file we want to hide)
+    FILE *fptr_secret;//File pointer to read the secret file.
+    char extn_secret_file[MAX_FILE_SUFFIX];//Stores secret file extension so decoder knows what type of file to reconstruct
+    char secret_data[MAX_SECRET_BUF_SIZE];//Temporary buffer to store 1 byte of secret data at a time.
+    long size_secret_file;//Stores the total size of the secret file
+
+    /* Stego Image Info */
+    char *stego_image_fname;//Name of output image that contains hidden data.
+    FILE *fptr_stego_image;//File pointer to create and write the stego image.
+    char magic[100];
+} EncodeInfo;
+
+
+/* Encoding function prototype */
+
+/* Check operation type */
+OperationType check_operation_type(char *argv[]);
+//check whether user wants encode or decode based on cla
+
+/* Read and validate Encode args from argv */
+Status read_and_validate_encode_args(char *argv[], EncodeInfo *encInfo);
+/*Reads filenames from command line arguments.Stores them inside the EncodeInfo structure.
+Checks if files exist and formats are correct.*/
+
+/* Perform the encoding */
+Status do_encoding(EncodeInfo *encInfo);
+//Main function that calls all other encoding functions in correct order.
+
+/* Get File pointers for i/p and o/p files */
+Status open_files(EncodeInfo *encInfo);
+/*Opens:Source image,Secret file,Output (stego) image
+Stores file pointers in the EncodeInfo structure.*/
+
+/* check capacity */
+Status check_capacity(EncodeInfo *encInfo);
+/*Checks if the image has enough pixels to hide:
+(Magic string + extension + file size + secret data.)
+If file is too big → encoding fails.*/
+
+/* Get image size */
+uint get_image_size_for_bmp(FILE *fptr_image);
+//Reads BMP to find total number of usable bytes for encoding.
+
+/* Get file size */
+uint get_file_size(FILE *fptr);
+//Finds how many bytes are in the secret file.
+
+/* Copy bmp image header */
+Status copy_bmp_header(FILE *fptr_src_image, FILE *fptr_dest_image);
+//BMP header is not modified.Copies header directly to stego image.
+
+/* Store Magic String */
+Status encode_magic_string(EncodeInfo *encInfo);
+/*Encodes a special text (e.g., "##") to indicate that secret data exists.
+Used during decoding for verification.*/
+
+/* Encode secret file extenstion */
+Status encode_secret_file_extn(char *extension,EncodeInfo *encInfo);
+//Encodes the file type(like.txt,.c,.jpg).Decoder needs this to recreate the secret file correctly.
+
+/* Encode secret file size */
+Status encode_secret_file_size(long file_size, EncodeInfo *encInfo);
+//Encodes how many bytes of secret data must be extracted during decoding.
+
+/* Encode secret file data*/
+Status encode_secret_file_data(EncodeInfo *encInfo);
+//Reads secret file contents.Sends data to encoding function.
+
+/* Encode function, which does the real encoding */
+Status encode_data_to_image(char *data, int size,EncodeInfo *encInfo);
+//Core function that writes data bits into LSB of image pixels.
+
+/* Encode a byte into LSB of image data array */
+Status encode_byte_to_lsb(char data, char *image_buffer);
+//Takes one byte of secret data.Converts to 8 bits and stores each bit in the LSB of 8 image bytes.
+
+Status encode_size_to_lsb(long size,EncodeInfo *encInfo);
+
+/* Copy remaining image bytes from src to stego image after encoding */
+Status copy_remaining_img_data(FILE *fptr_src, FILE *fptr_dest);
+//After encoding ends, remaining image data is copied as-is (unchanged).
+
+#endif
